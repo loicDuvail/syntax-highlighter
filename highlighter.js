@@ -85,6 +85,8 @@ function getStrModifier(txt) {
 }
 
 function generateHTML(txt, instructions) {
+    if(!instructions[0])return txt;
+
     let alter = getStrModifier(txt);
     let html;
     for (const instruction of instructions) {
@@ -97,9 +99,9 @@ function generateHTML(txt, instructions) {
 function getEnclosureInstructions(txt, enclosure) {
     const { enclosureStart, enclosureEnd, color, priority } = enclosure;
     let instructions = [];
+
     if (enclosureStart === enclosureEnd) {
         let indexes = txt.indexOfAll(enclosureStart.toString());
-        console.log(indexes, enclosureStart, txt)
         let startsIndexes = [];
         let endIndexes = [];
 
@@ -110,10 +112,10 @@ function getEnclosureInstructions(txt, enclosure) {
 
         for(let i = 0; i < startsIndexes.length; i++){
             let instruction = {
-                from:startsIndexes[i] + enclosureStart.length,
-                to:endIndexes[i] || txt.length,
-                mode:"encapsulate",
-                value:{
+                from: startsIndexes[i],
+                to: endIndexes[i] == txt.length ? txt.length : endIndexes[i] + enclosureEnd.length,
+                mode: "encapsulate",
+                value: {
                     before:`<span style="color:${color}">`,
                     after:"</span>"
                 },
@@ -123,12 +125,13 @@ function getEnclosureInstructions(txt, enclosure) {
         }
     }else{
         let startIndexes = txt.indexOfAll(enclosureStart);
-        let endIndexes = txt.indexOfAll(enclosureEnd);
+        let endIndexes = [];
+        startIndexes.forEach(sI => endIndexes.push( txt.indexOf(enclosureEnd, sI+1)) > 0 ?  txt.indexOf(enclosureEnd, sI+1) : txt.length)
 
         for(let i = 0; i < startIndexes.length; i++){
             let instruction = {
-                from:startIndexes[i] + enclosureStart.length,
-                to:endIndexes[i] || txt.length,
+                from:startIndexes[i],
+                to:endIndexes[i] + enclosureEnd.length || txt.length,
                 mode:"encapsulate",
                 value:{before:`<span style="color:${color}">`, after:"</span>"},
                 priority
@@ -142,7 +145,6 @@ function getEnclosureInstructions(txt, enclosure) {
 function getEnclosureArrInstructions(txt, enclosures){
     let instructions = [];
     for(const enclosure of enclosures){
-        console.log(enclosure)
         instructions.push(...getEnclosureInstructions(txt, enclosure))
     }
     return instructions;
@@ -155,13 +157,19 @@ function getWordsInstructions(txt, rule){
         for(const word of words){
             let wordIndexes = txt.fullIndexOfAll(word);
             let validity = 0;
+            //check if word between two word separators
             for(const wordIndex of wordIndexes){
-                for(const wordSep of wordSeps){
-                    if(txt.substring(wordIndex[0]-wordSep.length, wordIndex[0]) == wordSep)
+                for(const wordSep of wordSeps)
+                    if(txt.substring(wordIndex[0]-wordSep.length, wordIndex[0]) == wordSep || !wordSep || wordIndex[0] == 0){
                         validity++;
-                    if(txt.substring(wordIndex[1], wordIndex[1]-1 + wordSep.length) == wordSep)
+                        break;
+                    }
+                for(const wordSep of wordSeps)
+                    if(txt.substring(wordIndex[1], wordIndex[1] + wordSep.length) == wordSep || !wordSep || wordIndex[1] == txt.length){
                         validity++;
-                }
+                        break;
+                    }
+
             if(validity >= 2){
                 let instruction = {
                     from: wordIndex[0],
@@ -178,15 +186,108 @@ function getWordsInstructions(txt, rule){
     return instructions;
 }
 
+function getSpacesInstructions(txt, priority){
+    let spacesIndexes = txt.indexOfAll(" ");
+
+    let instructions = [];
+
+    for(const spaceIndex of spacesIndexes)
+        instructions.push({
+            from:spaceIndex,
+            to:spaceIndex+1,
+            mode:"replace",
+            value:"&nbsp;",
+            priority,
+        })
+
+    return instructions;
+}
+
+function getLineJumpsInstrunctions(txt, priority){
+    let ljIndexes = txt.indexOfAll("\n");
+
+    let instructions = [];
+
+    for(const ljIndex of ljIndexes)
+        instructions.push({
+            from:ljIndex,
+            to:ljIndex+1,
+            mode:"replace",
+            value:"<br>",
+            priority,
+        })
+
+    return instructions;
+}
+
+function getDynamicNewRule(txt, rule){
+    const {color, declarators, wordEnds, declaratorsStarts, declaratorsEnds,wordSeps, priority} = rule;
+    let matchingWords = [];
+
+    for(const declarator of declarators){
+        let declaratorsIndexes = txt.fullIndexOfAll(declarator);
+        console.log(declaratorsIndexes);
+        // remove from decIndexes if invalid declarator start
+        declaratorsIndexes.conditionalRemove((dec) =>!declaratorsStarts.some(
+            d => d == txt.substring((dec[0] - d.length) >= 0 ? dec[0] - d.length : 0, dec[0]) ) || !d || dec[0]==0
+        );
+        console.log(declaratorsIndexes);
+
+        // remove from decIndexes if invalid declarator end
+        declaratorsIndexes.conditionalRemove(dec => !declaratorsEnds.some(
+            d => d == txt.substring(dec[1], dec[1] + d.length <= txt.length ? dec[1] + d.length : txt.length) ) || !d || dec[1] == txt.length
+        );
+        console.log(declaratorsIndexes);
+
+        // add every word after valid declarators to matchingWords
+        declaratorsIndexes.forEach((dec)=> matchingWords.push(txt.substring(dec[1], dec[1] + declarator.length)))
+    }
+
+    let hashmap = {};
+    hashmap[color] = matchingWords;
+
+    let newRule = {
+        type:"word-coloring",
+        hashmap,
+        wordSeps,
+        priority
+    }
+    console.log(matchingWords)
+
+    return matchingWords ? newRule: {};
+}
+
+function handlePriorities(instructions){
+    let priorities = new Set();
+    instructions.forEach(i => priorities.add(i.priority));
+    // sort priorities descending
+    priorities = [...priorities].sort((a,b)=>b - a);
+    // remove lowest priority since elements with lowest priority won't affect others 
+    priorities.pop();
+
+    let clearedInstructions = [...instructions];
+
+    for(const priority of priorities)
+        for(const parent of instructions)
+            if(parent.priority == priority)
+                for(const instruction of instructions)
+                    if(instruction.priority < priority)
+                        if(instruction.from >= parent.from && instruction.to <= parent.to)
+                            clearedInstructions.conditionalRemove(i => i == instruction)
+                    
+    return clearedInstructions;
+}
+
 let defaultRules = [
     {
         type: "word-highlighting",
         hashmap: {
             "rgb(110, 134, 235)": ["this", "const", "let", "function"],
-            "rgb(189, 109, 214)": ["for", "return", "while", "do"],
+            "rgb(189, 109, 214)": ["for", "return", "while", "do", "if"],
+            "rgb(110, 154, 235)": ["false", "true"]
         },
 
-        wordSeps: " ,./+_)(*&^%@!=[]{}';|<>?\n".split(""),
+        wordSeps: " ,/+_)(*&^%@!=[]{}';|<>?\n".split(""),
         priority: 0,
     },
     {
@@ -195,7 +296,6 @@ let defaultRules = [
             "rgb(199, 242, 175)": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
             lightGrey: ",./+_*&^%@!=-;|<>?".split(""),
             "rgb(70, 144, 255)": "[]{}()".split(""),
-            "rgb(225, 140, 125)": ["'"],
         },
 
         wordSeps: [""],
@@ -205,24 +305,52 @@ let defaultRules = [
         type: "enclosure-highlighting",
         enclosures: [
             {
-                color: "red",
+                color: "rgb(225, 140, 125)",
                 enclosureStart: "'",
                 enclosureEnd: "'",
                 priority: 1,
             },
             {
+                color: "rgb(225, 140, 125)",
+                enclosureStart: "\"",
+                enclosureEnd: "\"",
+                priority: 2,
+            },
+            {
                 color: "green",
                 enclosureStart: "//",
                 enclosureEnd: "\n",
-                priority: 1,
+                priority: 3,
             },
         ],
     },
+    {
+        type: "dynamic-word-to-color-declaration",
+        color:"rgb(120, 154, 235)",
+        declarators:["const "],
+        wordEnds:" ,./+_*&^%@!=-;|<>?\n".split(""),
+        declaratorsStarts: " ;\n".split(""),
+        declaratorsEnds:[" "],
+        wordSeps:" ,./+_*&^%@!=-;|<>?\n".split(""),
+        priority:0
+    }
 ];
 
 function GENERATE_HIGHLIGHTER(rules = defaultRules) {
     function HIGHLIGHT(txt) {
         let instructions = [];
+
+        // generate rules dynamicly to color vairables for instance
+
+        let newRules = [];
+        for(const rule of rules){
+            if(rule.type === "dynamic-word-to-color-declaration"){
+                // newRules.push(getDynamicNewRule(txt, rule))
+            }
+        }
+        if(newRules[0])
+            instructions.push(...newRules);
+
         for (const rule of rules) {
             if (rule.type === "word-highlighting") {
                 instructions.push(...getWordsInstructions(txt, rule));
@@ -231,6 +359,22 @@ function GENERATE_HIGHLIGHTER(rules = defaultRules) {
                 instructions.push(...getEnclosureArrInstructions(txt, rule.enclosures));
             }
         }
+
+        ///////// default settings ///////////
+
+        if(!rules.some(r => r.type === "HTML-line-jumps" && r.set == false)){
+            instructions.push(...getLineJumpsInstrunctions(txt, 4));
+        }
+
+        if(!rules.some(r => r.type === "HTML-spaces" && r.set == false)){
+            instructions.push(...getSpacesInstructions(txt, 5));
+        }
+
+        // remove instructions enclosed by higher priority tags
+        instructions = handlePriorities(instructions);
+
+        console.log(instructions);
+
         return generateHTML(txt, instructions);
     }
 
@@ -239,49 +383,6 @@ function GENERATE_HIGHLIGHTER(rules = defaultRules) {
 
 // TESTS
 
-let txt = "this is a code for you, for thee has that code been";
-let html = generateHTML(txt, [
-    {
-        from: 0,
-        to: 4,
-        mode: "encapsulate",
-        value: { before: `<span style="color:blue">`, after: "</span>" },
-    },
-    {
-        from: 7,
-        to: 10,
-        mode: "encapsulate",
-        value: { before: `<span style="color:blue">`, after: "</span>" },
-    },
-    {
-        from: 7,
-        to: 8,
-        mode: "replace",
-        value: "&nbsp;",
-    },
-    {
-        from: 9,
-        to: 10,
-        mode: "replace",
-        value: "&nbsp;",
-    },
-    {
-        from: 10,
-        to: 14,
-        mode: "replace",
-        value: "small test",
-    },
-    {
-        from: 42,
-        to: 46,
-        mode: "encapsulate",
-        value: { before: `<span style="color:blue">`, after: "</span>" },
-    },
-]);
-
-
-console.log(html);
-
-let txt1 = "this is some basic code with 'a string in it' // this is a commentary\n"
-const HIGHLIGHT = GENERATE_HIGHLIGHTER();
-console.log(HIGHLIGHT(txt1));
+// let txt1 = "this is this some basic code with 'a string in it' // this is a commentary\n";
+// const HIGHLIGHT = GENERATE_HIGHLIGHTER();
+// console.log(HIGHLIGHT(txt1));
