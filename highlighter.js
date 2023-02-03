@@ -1,5 +1,6 @@
 //returns start and end index of every matches in string
 String.prototype.fullIndexOfAll = function (searchString) {
+    if (searchString === "") return [];
     let lastStartIndex = -1;
     let indexes = [];
     do {
@@ -85,7 +86,7 @@ function getStrModifier(txt) {
 }
 
 function generateHTML(txt, instructions) {
-    if(!instructions[0])return txt;
+    if (!instructions[0]) return txt;
 
     let alter = getStrModifier(txt);
     let html;
@@ -110,194 +111,377 @@ function getEnclosureInstructions(txt, enclosure) {
             endIndexes.push(indexes[i + 1] || txt.length);
         }
 
-        for(let i = 0; i < startsIndexes.length; i++){
+        for (let i = 0; i < startsIndexes.length; i++) {
             let instruction = {
                 from: startsIndexes[i],
-                to: endIndexes[i] == txt.length ? txt.length : endIndexes[i] + enclosureEnd.length,
+                to:
+                    endIndexes[i] == txt.length
+                        ? txt.length
+                        : endIndexes[i] + enclosureEnd.length,
                 mode: "encapsulate",
                 value: {
-                    before:`<span style="color:${color}">`,
-                    after:"</span>"
+                    before: `<span style="color:${color}">`,
+                    after: "</span>",
                 },
-                priority
+                priority,
             };
-            instructions.push(instruction)
+            instructions.push(instruction);
         }
-    }else{
+    } else {
         let startIndexes = txt.indexOfAll(enclosureStart);
         let endIndexes = [];
-        startIndexes.forEach(sI => endIndexes.push( txt.indexOf(enclosureEnd, sI+1)) > 0 ?  txt.indexOf(enclosureEnd, sI+1) : txt.length)
+        startIndexes.forEach((sI) =>
+            endIndexes.push(txt.indexOf(enclosureEnd, sI + 1)) > 0
+                ? txt.indexOf(enclosureEnd, sI + 1)
+                : txt.length
+        );
 
-        for(let i = 0; i < startIndexes.length; i++){
+        for (let i = 0; i < startIndexes.length; i++) {
             let instruction = {
-                from:startIndexes[i],
-                to:endIndexes[i] + enclosureEnd.length || txt.length,
-                mode:"encapsulate",
-                value:{before:`<span style="color:${color}">`, after:"</span>"},
-                priority
+                from: startIndexes[i],
+                to: endIndexes[i] + enclosureEnd.length || txt.length,
+                mode: "encapsulate",
+                value: {
+                    before: `<span style="color:${color}">`,
+                    after: "</span>",
+                },
+                priority,
             };
-            instructions.push(instruction)
+            instructions.push(instruction);
         }
-    };
-    return instructions;
-}
-
-function getEnclosureArrInstructions(txt, enclosures){
-    let instructions = [];
-    for(const enclosure of enclosures){
-        instructions.push(...getEnclosureInstructions(txt, enclosure))
     }
     return instructions;
 }
 
-function getWordsInstructions(txt, rule){
+function getEnclosureArrInstructions(txt, enclosures) {
     let instructions = [];
-    const {hashmap, wordSeps, priority} = rule;
-    for(const [color, words] of Object.entries(hashmap))
-        for(const word of words){
-            let wordIndexes = txt.fullIndexOfAll(word);
-            let validity = 0;
-            //check if word between two word separators
-            for(const wordIndex of wordIndexes){
-                for(const wordSep of wordSeps)
-                    if(txt.substring(wordIndex[0]-wordSep.length, wordIndex[0]) == wordSep || !wordSep || wordIndex[0] == 0){
-                        validity++;
-                        break;
-                    }
-                for(const wordSep of wordSeps)
-                    if(txt.substring(wordIndex[1], wordIndex[1] + wordSep.length) == wordSep || !wordSep || wordIndex[1] == txt.length){
-                        validity++;
-                        break;
-                    }
-
-            if(validity >= 2){
-                let instruction = {
-                    from: wordIndex[0],
-                    to:wordIndex[1],
-                    mode:"encapsulate",
-                    value:{before:`<span style="color:${color}">`, after:"</span>"},
-                    priority:priority
-                }
-                instructions.push(instruction)
-            }
-            }   
-            
-        }
+    for (const enclosure of enclosures) {
+        instructions.push(...getEnclosureInstructions(txt, enclosure));
+    }
     return instructions;
 }
 
-function getSpacesInstructions(txt, priority){
+function getWordsInstructions(txt, rule) {
+    let instructions = [];
+    let { hashmap, wordSeps, priority, from, to } = rule;
+    for (const [color, words] of Object.entries(hashmap))
+        for (const word of words) {
+            let wordIndexes = txt.fullIndexOfAll(word);
+            // removes wordIndexes if not between from and to if precised
+            if (from || to) {
+                from ||= 0;
+                to ||= txt.length;
+                wordIndexes.conditionalRemove((w) => w[0] < from || w[1] > to);
+            }
+            //check if word between two word separators
+            for (const wordIndex of wordIndexes) {
+                let preValid = false,
+                    postValid = false;
+                for (const wordSep of wordSeps)
+                    if (
+                        txt.substring(
+                            wordIndex[0] - wordSep.length,
+                            wordIndex[0]
+                        ) == wordSep ||
+                        !wordSep ||
+                        wordIndex[0] == 0
+                    ) {
+                        preValid = true;
+                        break;
+                    }
+                for (const wordSep of wordSeps)
+                    if (
+                        txt.substring(
+                            wordIndex[1],
+                            wordIndex[1] + wordSep.length
+                        ) == wordSep ||
+                        !wordSep ||
+                        wordIndex[1] == txt.length
+                    ) {
+                        postValid = true;
+                        break;
+                    }
+
+                if (preValid && postValid) {
+                    let instruction = {
+                        from: wordIndex[0],
+                        to: wordIndex[1],
+                        mode: "encapsulate",
+                        value: {
+                            before: `<span style="color:${color}">`,
+                            after: "</span>",
+                        },
+                        priority: priority,
+                    };
+                    instructions.push(instruction);
+                }
+            }
+        }
+
+    return instructions;
+}
+
+function getFunctionInstructions(txt, rule) {
+    const { color, priority, preFuncs, postFunc } = rule;
+
+    let instructions = [];
+
+    let postFuncIndexes = txt.indexOfAll(postFunc);
+
+    if (!postFuncIndexes) return {};
+
+    for (const postFuncIndex of postFuncIndexes)
+        for (let i = postFuncIndex - 1; i >= 0; i--) {
+            let done = false;
+            for (const preFunc of preFuncs) {
+                if (
+                    txt.substring(i, i + preFunc.length) == preFunc ||
+                    !preFunc ||
+                    i == 0
+                ) {
+                    let instruction = {
+                        mode: "encapsulate",
+                        from: i != 0 ? i + preFunc.length : 0,
+                        to: postFuncIndex,
+                        value: {
+                            before: `<span style="color:${color}">`,
+                            after: "</span>",
+                        },
+                        priority,
+                    };
+                    instructions.push(instruction);
+                    done = true;
+                    break;
+                }
+            }
+            if (done) break;
+        }
+
+    return instructions;
+}
+
+function getSpacesInstructions(txt, priority) {
     let spacesIndexes = txt.indexOfAll(" ");
 
     let instructions = [];
 
-    for(const spaceIndex of spacesIndexes)
+    for (const spaceIndex of spacesIndexes)
         instructions.push({
-            from:spaceIndex,
-            to:spaceIndex+1,
-            mode:"replace",
-            value:"&nbsp;",
+            from: spaceIndex,
+            to: spaceIndex + 1,
+            mode: "replace",
+            value: "&nbsp;",
             priority,
-        })
+        });
 
     return instructions;
 }
 
-function getLineJumpsInstrunctions(txt, priority){
+function getLineJumpsInstrunctions(txt, priority) {
     let ljIndexes = txt.indexOfAll("\n");
 
     let instructions = [];
 
-    for(const ljIndex of ljIndexes)
+    for (const ljIndex of ljIndexes)
         instructions.push({
-            from:ljIndex,
-            to:ljIndex+1,
-            mode:"replace",
-            value:"<br>",
+            from: ljIndex,
+            to: ljIndex + 1,
+            mode: "replace",
+            value: "<br>",
             priority,
-        })
+        });
 
     return instructions;
 }
 
-function getDynamicNewRule(txt, rule){
-    const {color, declarators, wordEnds, declaratorsStarts, declaratorsEnds,wordSeps, priority} = rule;
-    let matchingWords = [];
+function getLessThanInstructions(txt, priority) {
+    let instructions = [];
 
-    for(const declarator of declarators){
-        let declaratorsIndexes = txt.fullIndexOfAll(declarator);
-        console.log(declaratorsIndexes);
-        // remove from decIndexes if invalid declarator start
-        declaratorsIndexes.conditionalRemove((dec) =>!declaratorsStarts.some(
-            d => d == txt.substring((dec[0] - d.length) >= 0 ? dec[0] - d.length : 0, dec[0]) ) || !d || dec[0]==0
-        );
-        console.log(declaratorsIndexes);
+    let ltIndexes = txt.indexOfAll("<");
 
-        // remove from decIndexes if invalid declarator end
-        declaratorsIndexes.conditionalRemove(dec => !declaratorsEnds.some(
-            d => d == txt.substring(dec[1], dec[1] + d.length <= txt.length ? dec[1] + d.length : txt.length) ) || !d || dec[1] == txt.length
-        );
-        console.log(declaratorsIndexes);
-
-        // add every word after valid declarators to matchingWords
-        declaratorsIndexes.forEach((dec)=> matchingWords.push(txt.substring(dec[1], dec[1] + declarator.length)))
+    for (const ltIndex of ltIndexes) {
+        instructions.push({
+            from: ltIndex,
+            to: ltIndex + 1,
+            mode: "replace",
+            value: "&lt;",
+            priority,
+        });
     }
-
-    let hashmap = {};
-    hashmap[color] = matchingWords;
-
-    let newRule = {
-        type:"word-coloring",
-        hashmap,
-        wordSeps,
-        priority
-    }
-    console.log(matchingWords)
-
-    return matchingWords ? newRule: {};
+    return instructions;
 }
 
-function handlePriorities(instructions){
+function getDynamicNewRule(txt, rule) {
+    const {
+        color,
+        declarators,
+        declaratorsStarts,
+        declaratorsEnds,
+        declarationEnds,
+        wordBefores,
+        wordAfters,
+        priority,
+        blockStart,
+        blockEnd,
+    } = rule;
+
+    let newWordsToHighlight = [];
+
+    // indexes of every declarator found and the wordSeparator after it
+    let declaratorInstances = findEnclosedWords(
+        declaratorsStarts,
+        declaratorsEnds,
+        declarators,
+        txt
+    );
+
+    for (const declaratorInstance of declaratorInstances) {
+        let wordPossibleEnds = [];
+        for (const declarationEnd of declarationEnds) {
+            wordPossibleEnds.push(
+                txt.indexOf(
+                    declarationEnd,
+                    declaratorInstance.to + declaratorInstance.after.length || 0
+                )
+            );
+        }
+        let wordEnd = wordPossibleEnds.sort((a, b) => a - b).shift();
+        while (wordEnd == -1 && wordPossibleEnds[0])
+            wordEnd = wordPossibleEnds.shift();
+        if (wordEnd == -1 || !wordEnd) wordEnd = txt.length;
+
+        let wordStartIndex =
+            declaratorInstance.to + declaratorInstance.after.length;
+
+        newWordsToHighlight.push(txt.substring(wordStartIndex, wordEnd));
+    }
+
+    if (!newWordsToHighlight[0]) return {};
+
+    let hashmap = {};
+    hashmap[color] = newWordsToHighlight;
+
+    let newRule = {
+        type: "word-highlighting",
+        hashmap,
+        wordSeps: wordBefores,
+        priority,
+    };
+
+    return newRule;
+}
+
+// melts your brain
+function findEnclosedWords(befores, afters, words, txt) {
+    let enclosedWords = [];
+    for (const word of words) {
+        let wordIndexes = txt.fullIndexOfAll(word);
+        for (const wordIndex of wordIndexes) {
+            let preValid = false,
+                postValid = false;
+            for (const before of befores)
+                if (
+                    before ==
+                        txt.substring(
+                            wordIndex[0] - before.length >= 0
+                                ? wordIndex[0] - before.length
+                                : 0,
+                            wordIndex[0]
+                        ) ||
+                    !before ||
+                    wordIndex[0] == 0
+                ) {
+                    preValid = true;
+                    break;
+                }
+
+            for (const after of afters) {
+                if (
+                    !after ||
+                    wordIndex[1] == txt.length ||
+                    after ==
+                        txt.substring(wordIndex[1], wordIndex[1] + after.length)
+                ) {
+                    postValid = true;
+                    if (preValid && postValid)
+                        enclosedWords.push({
+                            from: wordIndex[0],
+                            to: wordIndex[1],
+                            after,
+                        });
+                    break;
+                }
+            }
+        }
+    }
+    return enclosedWords;
+}
+
+function handlePriorities(instructions) {
     let priorities = new Set();
-    instructions.forEach(i => priorities.add(i.priority));
+    instructions.forEach((i) => priorities.add(i.priority));
     // sort priorities descending
-    priorities = [...priorities].sort((a,b)=>b - a);
-    // remove lowest priority since elements with lowest priority won't affect others 
+    priorities = [...priorities].sort((a, b) => b - a);
+    // remove lowest priority since elements with lowest priority won't affect others
     priorities.pop();
 
     let clearedInstructions = [...instructions];
 
-    for(const priority of priorities)
-        for(const parent of instructions)
-            if(parent.priority == priority)
-                for(const instruction of instructions)
-                    if(instruction.priority < priority)
-                        if(instruction.from >= parent.from && instruction.to <= parent.to)
-                            clearedInstructions.conditionalRemove(i => i == instruction)
-                    
+    for (const priority of priorities)
+        for (const parent of instructions)
+            if (parent.priority == priority)
+                for (const instruction of instructions)
+                    if (instruction.priority < priority)
+                        if (
+                            instruction.from >= parent.from &&
+                            instruction.to <= parent.to
+                        )
+                            clearedInstructions.conditionalRemove(
+                                (i) => i == instruction
+                            );
+
     return clearedInstructions;
 }
 
 let defaultRules = [
     {
-        type: "word-highlighting",
-        hashmap: {
-            "rgb(110, 134, 235)": ["this", "const", "let", "function"],
-            "rgb(189, 109, 214)": ["for", "return", "while", "do", "if"],
-            "rgb(110, 154, 235)": ["false", "true"]
-        },
-
-        wordSeps: " ,/+_)(*&^%@!=[]{}';|<>?\n".split(""),
+        type: "function-highlighting",
+        color: "rgb(230,230,170)",
+        preFuncs: " ,./+_*&^%@!=-;|<>?()[]{}\n".split(""),
+        postFunc: "(",
         priority: 0,
     },
     {
         type: "word-highlighting",
         hashmap: {
+            "rgb(120, 144, 235)": [
+                "this",
+                "const",
+                "let",
+                "function",
+                "of",
+                "=>",
+            ],
+            "rgb(189, 109, 214)": [
+                "for",
+                "return",
+                "while",
+                "do",
+                "if",
+                "break",
+            ],
+            "rgb(110, 154, 235)": ["false", "true"],
+        },
+        wordSeps: " ,/+_)(*&^%@!=[]{}';|<>?\n".split(""),
+        priority: 1,
+    },
+    {
+        type: "word-highlighting",
+        hashmap: {
             "rgb(199, 242, 175)": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-            lightGrey: ",./+_*&^%@!=-;|<>?".split(""),
+            lightGrey: ",./+*&^%@!=-;|<>?".split(""),
             "rgb(70, 144, 255)": "[]{}()".split(""),
         },
-
         wordSeps: [""],
         priority: 0,
     },
@@ -308,16 +492,16 @@ let defaultRules = [
                 color: "rgb(225, 140, 125)",
                 enclosureStart: "'",
                 enclosureEnd: "'",
-                priority: 1,
-            },
-            {
-                color: "rgb(225, 140, 125)",
-                enclosureStart: "\"",
-                enclosureEnd: "\"",
                 priority: 2,
             },
             {
-                color: "green",
+                color: "rgb(225, 140, 125)",
+                enclosureStart: '"',
+                enclosureEnd: '"',
+                priority: 2,
+            },
+            {
+                color: "rgb(80,130,0)",
                 enclosureStart: "//",
                 enclosureEnd: "\n",
                 priority: 3,
@@ -325,15 +509,27 @@ let defaultRules = [
         ],
     },
     {
-        type: "dynamic-word-to-color-declaration",
-        color:"rgb(120, 154, 235)",
-        declarators:["const "],
-        wordEnds:" ,./+_*&^%@!=-;|<>?\n".split(""),
-        declaratorsStarts: " ;\n".split(""),
-        declaratorsEnds:[" "],
-        wordSeps:" ,./+_*&^%@!=-;|<>?\n".split(""),
-        priority:0
-    }
+        type: "variable-declaration",
+        color: "rgb(90, 184, 255)",
+        declarators: ["const"],
+        declaratorsStarts: " ;[](){}\n".split(""),
+        declaratorsEnds: [" "],
+        declarationEnds: [";", " ", "="],
+        wordBefores: " ,./+_*&^%@!=-;|<>?()[]{}\n".split(""),
+        wordAfters: " ,./+_*&^%@!=-;|<>?\n".split(""),
+        priority: 0,
+    },
+    {
+        type: "variable-declaration",
+        color: "rgb(230,230,170)",
+        declarators: ["function"],
+        declaratorsStarts: " ;[](){}\n".split(""),
+        declaratorsEnds: [" "],
+        declarationEnds: ["(", " ", "\n"],
+        wordBefores: " ,./+_*&^%@!=-;|<>?()[]{}\n".split(""),
+        wordAfters: " ,./+_*&^%@!=-;|<>?\n".split(""),
+        priority: 0,
+    },
 ];
 
 function GENERATE_HIGHLIGHTER(rules = defaultRules) {
@@ -343,46 +539,60 @@ function GENERATE_HIGHLIGHTER(rules = defaultRules) {
         // generate rules dynamicly to color vairables for instance
 
         let newRules = [];
-        for(const rule of rules){
-            if(rule.type === "dynamic-word-to-color-declaration"){
-                // newRules.push(getDynamicNewRule(txt, rule))
+        for (const rule of rules) {
+            if (rule.type === "variable-declaration") {
+                newRules.push(getDynamicNewRule(txt, rule));
             }
         }
-        if(newRules[0])
-            instructions.push(...newRules);
 
         for (const rule of rules) {
             if (rule.type === "word-highlighting") {
                 instructions.push(...getWordsInstructions(txt, rule));
             }
-            if(rule.type === "enclosure-highlighting"){
-                instructions.push(...getEnclosureArrInstructions(txt, rule.enclosures));
+            if (rule.type === "enclosure-highlighting") {
+                instructions.push(
+                    ...getEnclosureArrInstructions(txt, rule.enclosures)
+                );
+            }
+            if (rule.type === "function-highlighting") {
+                instructions.push(...getFunctionInstructions(txt, rule));
             }
         }
+        if (newRules[0])
+            for (const rule of newRules) {
+                if (rule.type === "word-highlighting") {
+                    instructions.push(...getWordsInstructions(txt, rule));
+                }
+                if (rule.type === "enclosure-highlighting") {
+                    instructions.push(
+                        ...getEnclosureArrInstructions(txt, rule.enclosures)
+                    );
+                }
+            }
 
         ///////// default settings ///////////
 
-        if(!rules.some(r => r.type === "HTML-line-jumps" && r.set == false)){
+        if (
+            !rules.some((r) => r.type === "HTML-line-jumps" && r.set == false)
+        ) {
             instructions.push(...getLineJumpsInstrunctions(txt, 4));
         }
 
-        if(!rules.some(r => r.type === "HTML-spaces" && r.set == false)){
-            instructions.push(...getSpacesInstructions(txt, 5));
+        if (!rules.some((r) => r.type === "HTML-spaces" && r.set == false)) {
+            instructions.push(...getSpacesInstructions(txt, 4));
+        }
+
+        if (!rules.some((r) => r.type === "HTML-less-than" && r.set == false)) {
+            instructions.push(...getLessThanInstructions(txt, 4));
         }
 
         // remove instructions enclosed by higher priority tags
         instructions = handlePriorities(instructions);
 
-        console.log(instructions);
+        log(instructions);
 
         return generateHTML(txt, instructions);
     }
 
     return HIGHLIGHT;
 }
-
-// TESTS
-
-// let txt1 = "this is this some basic code with 'a string in it' // this is a commentary\n";
-// const HIGHLIGHT = GENERATE_HIGHLIGHTER();
-// console.log(HIGHLIGHT(txt1));

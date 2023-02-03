@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <script src="highlighter.js" defer></script>
+        <script src="textEditor.js" defer></script>
+        <link rel="stylesheet" href="styles.css" />
+        <title>Document</title>
+    </head>
+    <body>
+        <div id="editor-container">
+            <button id="run-btn">run</button>
+            <div id="editor">
+                <p id="line-count">1</p>
+                <div id="code-container">
+                    <textarea id="input" autofocus></textarea>
+                    <p
+                        name=""
+                        id="txt"
+                        style="font-family: monospace; font-size: 1em"
+                    ></p>
+                </div>
+            </div>
+        </div>
+        <div id="console">
+            <header>console</header>
+            <div id="console-content"></div>
+        </div>
+    </body>
+</html>

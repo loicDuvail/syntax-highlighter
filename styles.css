@@ -1,0 +1,140 @@
+body {
+    background-color: rgb(31, 30, 30);
+    display: flex;
+    margin: 30px;
+}
+
+/* /////////// editor /////////// */
+
+#editor-container{
+    position: relative;
+    display: flex;
+    height: 90vh;
+    width: 100%;
+}
+#run-btn{
+    position: absolute;
+    right: 0;
+    justify-self: right;
+    padding: 5px 10px;
+    border: 1px solid lightgrey;
+    background-color: rgb(31, 30, 30);
+    font-family: monospace;
+    color: lightgrey;
+    cursor: pointer;
+    transition: all 100ms ease-in-out;
+    z-index: 2;
+}
+#editor {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow-y: scroll;
+    display: flex;
+    resize: horizontal;
+    font-size: 1.2em;
+    line-height: 1.2em;
+    border: 1px solid grey;
+}
+
+#run-btn:hover{
+    transform: scale(110%);
+    transform: translate(-10%,0);
+}
+
+#code-container {
+    position: relative;
+    width: 90%;
+    margin-left: 15px;
+    margin-top: 11px;
+}
+#line-count {
+    position: relative;
+    width: fit-content;
+    height: fit-content;
+    margin-left: 12px;
+    color: rgb(169, 169, 169);
+    text-align: right;
+    font-family: monospace;
+}
+#input {
+    position: absolute;
+    width: 100%;
+    border-color: transparent;
+    outline: none;
+    background-color: transparent;
+    color: transparent;
+    caret-color: white;
+    z-index: 1;
+    resize: none;
+    font-size: inherit;
+    line-height: inherit;
+}
+#txt {
+    position: absolute;
+    width: 100%;
+    height: 99%;
+    margin: 3px;
+    margin-left: 2.7px;
+    font-family: monospace;
+
+    background-color: rgb(30, 31, 30);
+    color: rgb(149, 222, 235);
+}
+
+/* /////////// console /////////// */
+
+#console{
+    width: 100%;
+    height: 90vh;
+    margin-left: 20px;
+    color: lightgrey;
+    font-family: monospace;
+    font-size: 1.2em;
+    border: 1px solid grey;
+}
+#console > header{
+    max-width:100%;
+    margin: 0;
+    padding: 5px;
+    border-bottom: 1px solid grey;
+}
+#console-content{
+    max-width: 100%;
+    width: 100%;
+    height: calc(100% - 46px);
+    padding: 10px;
+    padding-top: 4px;
+    overflow-y: scroll;
+    font-size: 13.5px;
+}
+
+hr{
+    width: calc(100% - 20px);
+    margin-left: 0;
+    border: none;
+    border-bottom: 1px solid rgba(146, 146, 146, 0.308);
+}
+
+.new-run-hr{
+    border-bottom: 1px solid rgb(184, 105, 105);
+}
+
+.new-run-decl{
+    color: rgb(216, 105, 105);
+}
+
+/* width */
+::-webkit-scrollbar {
+    width: 15px;
+  }
+  
+  /* Track */
+  ::-webkit-scrollbar-track {
+    background: rgb(44, 44, 44);
+  }
+  
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+    background: rgb(88, 88, 88);
+  }
