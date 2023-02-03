@@ -5,17 +5,23 @@ body {
 }
 
 /* /////////// editor /////////// */
-
-#editor-container{
+#editor {
     position: relative;
-    display: flex;
+    height: 100%;
+    overflow-y: scroll;
+    width: 70%;
     height: 90vh;
-    width: 100%;
+    display: flex;
+    resize: horizontal;
+    font-size: 1.2em;
+    line-height: 1.2em;
+    border: 1px solid grey;
 }
+
 #run-btn{
     position: absolute;
+    top: 0;
     right: 0;
-    justify-self: right;
     padding: 5px 10px;
     border: 1px solid lightgrey;
     background-color: rgb(31, 30, 30);
@@ -24,17 +30,6 @@ body {
     cursor: pointer;
     transition: all 100ms ease-in-out;
     z-index: 2;
-}
-#editor {
-    position: relative;
-    height: 100%;
-    width: 100%;
-    overflow-y: scroll;
-    display: flex;
-    resize: horizontal;
-    font-size: 1.2em;
-    line-height: 1.2em;
-    border: 1px solid grey;
 }
 
 #run-btn:hover{
@@ -85,7 +80,7 @@ body {
 /* /////////// console /////////// */
 
 #console{
-    width: 100%;
+    width: 50%;
     height: 90vh;
     margin-left: 20px;
     color: lightgrey;
